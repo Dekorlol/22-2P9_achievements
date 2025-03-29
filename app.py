@@ -1,14 +1,12 @@
+import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from contextlib import asynccontextmanager
-
-import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
-
 from models import User, database
 
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
@@ -24,10 +22,8 @@ class TokenData(BaseModel):
 
 class UserData(BaseModel):
     username: str
-    email: str | None = None
-    full_name: str | None = None
-    disabled: bool | None = None
-
+    full_name: str
+    
 class UserCreate(UserData):
     password: str
 
@@ -61,9 +57,7 @@ def authenticate_user(username: str, password: str):
         return False
     return UserData(
         username=user.username,
-        email=user.email,
-        full_name=user.full_name,
-        disabled=user.disabled,
+        full_name=user.full_name
     )
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
@@ -95,39 +89,37 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         raise credentials_exception
     return UserData(
         username=user.username,
-        email=user.email,
-        full_name=user.full_name,
-        disabled=user.disabled,
+        full_name=user.full_name
     )
 
 async def get_current_active_user(
     current_user: Annotated[UserData, Depends(get_current_user)],
 ):
     print(current_user.model_dump())
-    if current_user.disabled:
+    try:
         raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
+    finally:
+        pass
 
 @app.post("/register")
-async def register_user(username: str, password: str, full_name: str = None, email: str = None, disabled: bool = False):
-    user = User.get_or_none(username=username)
+async def register_user(userdata: UserCreate = Body(embed=True)):
+    user = User.get_or_none(username= userdata.username)
     if user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username is already in use",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    hash_password = get_password_hash(password)
+    hash_password = get_password_hash(userdata.password)
     User.create(
-        username = username,
-        full_name = full_name,
-        email = email,
+        username = userdata.username,
+        full_name = userdata.full_name,
         hashed_password = hash_password,
-        disabled = disabled 
+        disabled = False
     )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": username}, expires_delta=access_token_expires
+        data={"sub": userdata.username}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
 

@@ -1,4 +1,4 @@
-from peewee import Model, CharField, BooleanField, SqliteDatabase, ForeignKeyField
+from peewee import Model, CharField, SqliteDatabase, ForeignKeyField, BooleanField
 
 database = SqliteDatabase('my_database.db')
 
@@ -7,11 +7,10 @@ class Table(Model):
         database = database
 
 class User(Table):
-    username = CharField(unique=True)
-    full_name = CharField(null=True)
-    email = CharField(null=True)
+    username = CharField()
+    full_name = CharField()
     hashed_password = CharField()
-    disabled = BooleanField(default=False)
+    disabled = BooleanField()
 
 class Role(Table):
     name = CharField()
